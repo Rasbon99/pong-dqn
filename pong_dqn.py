@@ -2,6 +2,7 @@ import argparse
 import math
 import random
 import time
+import os
 from collections import deque, namedtuple
 
 import numpy as np
@@ -32,10 +33,12 @@ class PongEnv:
 
         if render:
             pygame.init()
-            self.screen = pygame.display.set_mode((self.width, self.height))
+            self.screen = pygame.display.set_mode((self.width, self.height), pygame.RESIZABLE)
             pygame.display.set_caption("Pong DQN")
             self.clock = pygame.time.Clock()
             self.font = pygame.font.SysFont("Arial", 32)
+
+            self.game_surface = pygame.Surface((self.width, self.height))
 
             # Joystick 
             pygame.joystick.init()
@@ -175,32 +178,52 @@ class PongEnv:
                 pygame.quit()
                 raise SystemExit
             elif evt.type == pygame.KEYDOWN:
-                if evt.key == pygame.K_r:   # reset with R
+                if evt.key == pygame.K_r:
                     self.reset(full_reset=True)
             elif evt.type == pygame.JOYBUTTONDOWN:
-                if evt.button == 9:         # reset with joystick start
+                if evt.button == 9:
                     self.reset(full_reset=True)
 
-        self.screen.fill((0, 0, 0))
-        pygame.draw.rect(self.screen, (255, 255, 255), (0, int(self.player_y), self.paddle_w, self.paddle_h))
-        pygame.draw.rect(self.screen, (255, 255, 255), (self.width - self.paddle_w, int(self.agent_y), self.paddle_w, self.paddle_h))
-        pygame.draw.ellipse(self.screen, (255, 255, 255), (int(self.ball_x), int(self.ball_y), self.ball_size, self.ball_size))
+        # disegna tutto sulla superficie del gioco
+        self.game_surface.fill((0, 0, 0))
+        pygame.draw.rect(self.game_surface, (255, 255, 255), (0, int(self.player_y), self.paddle_w, self.paddle_h))
+        pygame.draw.rect(self.game_surface, (255, 255, 255), (self.width - self.paddle_w, int(self.agent_y), self.paddle_w, self.paddle_h))
+        pygame.draw.ellipse(self.game_surface, (255, 255, 255), (int(self.ball_x), int(self.ball_y), self.ball_size, self.ball_size))
 
         # score
         score_text = f"{self.player_score} | {self.agent_score}"
         score_surface = self.font.render(score_text, True, (255, 255, 255))
         score_rect = score_surface.get_rect(center=(self.width//2, 30))
-        self.screen.blit(score_surface, score_rect)
+        self.game_surface.blit(score_surface, score_rect)
 
         # win message
         if self.winner:
             msg = f"{self.winner} Win!"
             msg_surface = self.font.render(msg, True, (255, 255, 0))
             msg_rect = msg_surface.get_rect(center=(self.width//2, self.height//2))
-            self.screen.blit(msg_surface, msg_rect)
+            self.game_surface.blit(msg_surface, msg_rect)
+
+        # calcola il fattore di scala per mantenere il rapporto 4:3
+        window_width, window_height = self.screen.get_size()
+        scale_w = window_width / self.width
+        scale_h = window_height / self.height
+        scale = min(scale_w, scale_h)
+
+        new_w = int(self.width * scale)
+        new_h = int(self.height * scale)
+
+        # centra la superficie nella finestra
+        x_offset = (window_width - new_w) // 2
+        y_offset = (window_height - new_h) // 2
+
+        scaled_surface = pygame.transform.smoothscale(self.game_surface, (new_w, new_h))
+        self.screen.fill((0, 0, 0))  # bordo nero
+        self.screen.blit(scaled_surface, (x_offset, y_offset))
 
         pygame.display.flip()
         self.clock.tick(self.fps)
+
+
 
     def close(self):
         if self.render_mode:
